@@ -34,10 +34,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS Middleware Setup
+# Permissive Enterprise CORS Setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,9 +54,6 @@ async def add_security_headers(
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"
-    )
     return response
 
 

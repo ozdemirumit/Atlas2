@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Network, Server, HardDrive, Cpu, GitFork, Search, ChevronRight, Plus, Trash2, CheckCircle2, X, Database, RefreshCw } from 'lucide-react';
+import { getLocalStore, setLocalStore } from '../api/client';
 
 interface AssetConnector {
   connector_id: string;
@@ -37,9 +38,18 @@ export const TopologyPage: React.FC = () => {
     { connector_id: 'conn-004', name: 'SAN-SW-BROCADE-620', connector_type: 'Brocade SAN Switch', host_fqdn: '192.168.20.12', port: 22, status: 'ACTIVE', edges_mapped: 24, registered_at: '2026-08-05' },
   ];
 
-  const [connectors, setConnectors] = useState<AssetConnector[]>(defaultConnectors);
+  // Initialize connectors from LocalStorage FIRST so user changes are NEVER lost on tab switch
+  const [connectors, setConnectors] = useState<AssetConnector[]>(() => {
+    return getLocalStore<AssetConnector[]>('atlas_connectors', defaultConnectors);
+  });
 
-  // Fetch live connectors from Backend API
+  // Sync state changes to LocalStorage
+  const updateConnectorsState = (newConnectors: AssetConnector[]) => {
+    setConnectors(newConnectors);
+    setLocalStore('atlas_connectors', newConnectors);
+  };
+
+  // Fetch live connectors from Backend API and sync
   const loadConnectors = async () => {
     setIsRefreshing(true);
     try {
@@ -47,11 +57,11 @@ export const TopologyPage: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          setConnectors(data);
+          updateConnectorsState(data);
         }
       }
     } catch {
-      // offline fallback
+      // fallback
     } finally {
       setTimeout(() => setIsRefreshing(false), 400);
     }
@@ -66,6 +76,20 @@ export const TopologyPage: React.FC = () => {
     if (!assetName || !assetHost) return;
 
     setIsRegistering(true);
+
+    const localAsset: AssetConnector = {
+      connector_id: `conn-${Date.now()}`,
+      name: assetName,
+      connector_type: assetType,
+      host_fqdn: assetHost,
+      port: Number(assetPort),
+      status: 'ACTIVE',
+      edges_mapped: 12,
+      registered_at: new Date().toISOString().substring(0, 10),
+    };
+
+    // Update Local State & LocalStorage immediately for zero-lag UI
+    updateConnectorsState([localAsset, ...connectors]);
 
     try {
       const res = await fetch('/api/v1/connectors/register', {
@@ -82,50 +106,30 @@ export const TopologyPage: React.FC = () => {
 
       if (res.ok) {
         const newAsset = await res.json();
-        setConnectors(prev => [newAsset, ...prev]);
-      } else {
-        const localAsset: AssetConnector = {
-          connector_id: `conn-${Date.now()}`,
-          name: assetName,
-          connector_type: assetType,
-          host_fqdn: assetHost,
-          port: Number(assetPort),
-          status: 'ACTIVE',
-          edges_mapped: 12,
-          registered_at: new Date().toISOString().substring(0, 10),
-        };
-        setConnectors(prev => [localAsset, ...prev]);
+        // Replace temporary local asset with API returned registered asset
+        updateConnectorsState([newAsset, ...connectors.filter(c => c.connector_id !== localAsset.connector_id)]);
       }
-
-      setNotification(`"${assetName}" (${assetType}) topoloji haritasına eklendi!`);
-      setShowAddModal(false);
-      setAssetName('');
-      setAssetHost('');
-      setTimeout(() => setNotification(''), 5000);
     } catch {
-      const localAsset: AssetConnector = {
-        connector_id: `conn-${Date.now()}`,
-        name: assetName,
-        connector_type: assetType,
-        host_fqdn: assetHost,
-        port: Number(assetPort),
-        status: 'ACTIVE',
-        edges_mapped: 12,
-        registered_at: new Date().toISOString().substring(0, 10),
-      };
-      setConnectors(prev => [localAsset, ...prev]);
+      // offline fallback already persisted in LocalStorage
+    } finally {
       setNotification(`"${assetName}" (${assetType}) topoloji haritasına eklendi!`);
       setShowAddModal(false);
       setAssetName('');
       setAssetHost('');
-      setTimeout(() => setNotification(''), 5000);
-    } finally {
       setIsRegistering(false);
+      setTimeout(() => setNotification(''), 5000);
     }
   };
 
   const handleDeleteAsset = async (connector_id: string, name: string) => {
     if (!window.confirm(`"${name}" varlığını ve bağlı ilişki kenarlarını silmek istediğinizden emin misiniz?`)) return;
+
+    const nextConnectors = connectors.filter(c => c.connector_id !== connector_id);
+    updateConnectorsState(nextConnectors);
+
+    if (selectedAsset?.connector_id === connector_id) {
+      setSelectedAsset(null);
+    }
 
     try {
       await fetch(`/api/v1/connectors/${connector_id}`, { method: 'DELETE' });
@@ -133,10 +137,6 @@ export const TopologyPage: React.FC = () => {
       // offline fallback
     }
 
-    setConnectors(prev => prev.filter(c => c.connector_id !== connector_id));
-    if (selectedAsset?.connector_id === connector_id) {
-      setSelectedAsset(null);
-    }
     setNotification(`"${name}" varlığı topoloji haritasından kaldırıldı.`);
     setTimeout(() => setNotification(''), 5000);
   };
