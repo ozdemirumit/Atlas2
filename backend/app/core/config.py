@@ -34,8 +34,9 @@ class Settings(BaseSettings):
     ENABLE_DEV_IDENTITY: bool = True
     DEV_IDENTITY_SUBJECT: str = "local-operator"
     DEV_IDENTITY_NAME: str = "Local Operator"
-    DEV_IDENTITY_ROLES: list[str] = Field(default_factory=lambda: ["C0_OPERATOR"])
-    DEV_IDENTITY_SCOPES: list[str] = Field(default_factory=lambda: ["identity.self.read"])
+    # Typed as Any so pydantic-settings DotEnvSettingsSource does not trigger json.loads before validator
+    DEV_IDENTITY_ROLES: Any = Field(default_factory=lambda: ["C0_OPERATOR"])
+    DEV_IDENTITY_SCOPES: Any = Field(default_factory=lambda: ["identity.self.read"])
 
     @field_validator("DEV_IDENTITY_ROLES", "DEV_IDENTITY_SCOPES", mode="before")
     @classmethod
