@@ -19,9 +19,19 @@ if %errorlevel% equ 0 (
 :: Node Runner Resolution
 where pnpm >nul 2>&1
 if %errorlevel% equ 0 (
+    set PKG_MGR=pnpm
     set FRONTEND_RUN=pnpm dev
 ) else (
+    set PKG_MGR=npm
     set FRONTEND_RUN=npm run dev
+)
+
+:: Ensure Frontend Dependencies Are Installed
+if not exist frontend\node_modules (
+    echo [INFO] frontend\node_modules not found. Installing frontend dependencies with %PKG_MGR%...
+    cd frontend
+    call %PKG_MGR% install
+    cd ..
 )
 
 echo Starting Backend API on http://localhost:8000 ...
