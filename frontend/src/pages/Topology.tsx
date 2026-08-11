@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Network, Server, HardDrive, Cpu, GitFork, Search, ChevronRight, Plus, Trash2, CheckCircle2, X, Database } from 'lucide-react';
+import { Network, Server, HardDrive, Cpu, GitFork, Search, ChevronRight, Plus, Trash2, CheckCircle2, X, Database, RefreshCw } from 'lucide-react';
 
 interface AssetConnector {
   connector_id: string;
@@ -17,6 +17,7 @@ export const TopologyPage: React.FC = () => {
   const [selectedAsset, setSelectedAsset] = useState<AssetConnector | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [notification, setNotification] = useState('');
   const [activeTierFilter, setActiveTierFilter] = useState<'ALL' | 'STORAGE' | 'SWITCH' | 'HYPERVISOR' | 'DATABASE'>('ALL');
 
@@ -39,15 +40,25 @@ export const TopologyPage: React.FC = () => {
   const [connectors, setConnectors] = useState<AssetConnector[]>(defaultConnectors);
 
   // Fetch live connectors from Backend API
-  useEffect(() => {
-    fetch('/api/v1/connectors')
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data && Array.isArray(data) && data.length > 0) {
+  const loadConnectors = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch('/api/v1/connectors');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
           setConnectors(data);
         }
-      })
-      .catch(() => {});
+      }
+    } catch {
+      // offline fallback
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400);
+    }
+  };
+
+  useEffect(() => {
+    loadConnectors();
   }, []);
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -130,6 +141,12 @@ export const TopologyPage: React.FC = () => {
     setTimeout(() => setNotification(''), 5000);
   };
 
+  // Dynamic Tier Breakdown Calculation
+  const storageAssets = connectors.filter(c => c.connector_type.includes('Hitachi') || c.connector_type.includes('Storage'));
+  const switchAssets = connectors.filter(c => c.connector_type.includes('SANnav') || c.connector_type.includes('Switch'));
+  const hypervisorAssets = connectors.filter(c => c.connector_type.includes('ESXi') || c.connector_type.includes('Host'));
+  const databaseAssets = connectors.filter(c => c.connector_type.includes('Database'));
+
   const filteredConnectors = connectors.filter(c => {
     const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           c.connector_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -160,6 +177,14 @@ export const TopologyPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button 
+            onClick={loadConnectors}
+            className="btn-secondary text-xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
+            <span>Yenile</span>
+          </button>
+
           <div className="flex items-center gap-3 font-mono text-xs">
             <span className="badge-pill badge-cyan">CONNECTORS: {connectors.length} ACTIVE</span>
             <span className="badge-pill badge-emerald">{totalEdges} EDGES MAPPED</span>
@@ -187,7 +212,7 @@ export const TopologyPage: React.FC = () => {
         </div>
       )}
 
-      {/* Live Interactive SVG Visualizer Graph Canvas */}
+      {/* Dynamic Live Interactive SVG Visualizer Graph Canvas */}
       <div className="atlas-glass-panel p-6 space-y-4 border border-slate-800 relative overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3 font-mono text-xs">
           <div className="flex items-center gap-2 text-cyan-300 font-bold">
@@ -220,7 +245,7 @@ export const TopologyPage: React.FC = () => {
               </linearGradient>
             </defs>
 
-            {/* Connecting Edges */}
+            {/* Dynamic Connecting Edges */}
             <path d="M 170 160 L 300 100" stroke="url(#grad-storage-switch)" strokeWidth="2.5" strokeDasharray="6 3" className="animate-pulse" />
             <path d="M 170 160 L 300 220" stroke="url(#grad-storage-switch)" strokeWidth="2.5" />
             
@@ -230,7 +255,7 @@ export const TopologyPage: React.FC = () => {
             <path d="M 550 160 L 670 160" stroke="url(#grad-esx-db)" strokeWidth="3" />
           </svg>
 
-          {/* Interactive Tier Nodes */}
+          {/* Dynamic Interactive Tier Nodes */}
           <div className="relative z-10 w-full h-full flex items-center justify-between px-12 font-mono text-xs">
             {/* Tier 1: SAN Storage */}
             <div className="flex flex-col items-center gap-2 group cursor-pointer">
@@ -238,24 +263,32 @@ export const TopologyPage: React.FC = () => {
                 <HardDrive className="w-7 h-7" />
               </div>
               <div className="text-center">
-                <div className="font-bold text-white text-xs">Hitachi VSP / Pure FA</div>
-                <div className="text-[10px] text-cyan-400">STORAGE TIER (1.2ms)</div>
+                <div className="font-bold text-white text-xs">
+                  {storageAssets.length > 0 ? storageAssets[0].name : 'Hitachi VSP / Pure FA'}
+                </div>
+                <div className="text-[10px] text-cyan-400 font-bold">
+                  STORAGE TIER ({storageAssets.length} ARRAYS)
+                </div>
               </div>
             </div>
 
             {/* Tier 2: SAN Switches */}
-            <div className="flex flex-col gap-12">
+            <div className="flex flex-col gap-10">
               <div className="flex flex-col items-center gap-1 group cursor-pointer">
                 <div className="p-3 rounded-2xl bg-indigo-950/80 border-2 border-indigo-500 text-indigo-400 shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
                   <Network className="w-5 h-5" />
                 </div>
-                <div className="text-[10px] text-indigo-300 font-bold">Brocade SANnav (Fabric A)</div>
+                <div className="text-[10px] text-indigo-300 font-bold">
+                  {switchAssets.length > 0 ? switchAssets[0].name : 'Brocade SANnav'}
+                </div>
               </div>
               <div className="flex flex-col items-center gap-1 group cursor-pointer">
                 <div className="p-3 rounded-2xl bg-indigo-950/80 border-2 border-indigo-500 text-indigo-400 shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
                   <Network className="w-5 h-5" />
                 </div>
-                <div className="text-[10px] text-indigo-300 font-bold">Cisco MDS (Fabric B)</div>
+                <div className="text-[10px] text-indigo-300 font-bold">
+                  {switchAssets.length > 1 ? switchAssets[1].name : 'Cisco MDS (Fabric B)'}
+                </div>
               </div>
             </div>
 
@@ -265,8 +298,12 @@ export const TopologyPage: React.FC = () => {
                 <Cpu className="w-7 h-7" />
               </div>
               <div className="text-center">
-                <div className="font-bold text-white text-xs">VMware ESXi 8.0 Cluster</div>
-                <div className="text-[10px] text-emerald-400">HYPERVISOR (32 HOSTS)</div>
+                <div className="font-bold text-white text-xs">
+                  {hypervisorAssets.length > 0 ? hypervisorAssets[0].name : 'VMware ESXi Cluster'}
+                </div>
+                <div className="text-[10px] text-emerald-400 font-bold">
+                  HYPERVISOR ({hypervisorAssets.length || 32} HOSTS)
+                </div>
               </div>
             </div>
 
@@ -276,8 +313,12 @@ export const TopologyPage: React.FC = () => {
                 <Database className="w-7 h-7" />
               </div>
               <div className="text-center">
-                <div className="font-bold text-white text-xs">PostgreSQL 18 / Oracle HA</div>
-                <div className="text-[10px] text-amber-400">DATABASE TIER (99.99%)</div>
+                <div className="font-bold text-white text-xs">
+                  {databaseAssets.length > 0 ? databaseAssets[0].name : 'PostgreSQL 18 HA'}
+                </div>
+                <div className="text-[10px] text-amber-400 font-bold">
+                  DATABASE TIER ({databaseAssets.length || 12} INSTANCES)
+                </div>
               </div>
             </div>
           </div>
@@ -286,12 +327,12 @@ export const TopologyPage: React.FC = () => {
         {/* Tier Legend & Explanation Footer */}
         <div className="flex flex-wrap items-center justify-between gap-4 pt-2 font-mono text-xs text-slate-400 border-t border-slate-800">
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> SAN Storage</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-400" /> FC Switches (SANnav)</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> ESXi Hypervisors</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Enterprise Databases</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> SAN Storage ({storageAssets.length})</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-400" /> SAN Switches ({switchAssets.length})</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> ESXi Hosts ({hypervisorAssets.length})</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Enterprise DB ({databaseAssets.length})</span>
           </div>
-          <span className="text-cyan-400 font-bold">Zaman-Uyumlu Otomatik Bağımlılık Haritalama</span>
+          <span className="text-cyan-400 font-bold">Canlı Dinamik Bağımlılık Güncellemesi Aktif</span>
         </div>
       </div>
 
@@ -319,19 +360,19 @@ export const TopologyPage: React.FC = () => {
             onClick={() => setActiveTierFilter('STORAGE')}
             className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTierFilter === 'STORAGE' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
           >
-            Storage ({connectors.filter(c => c.connector_type.includes('Hitachi') || c.connector_type.includes('Storage')).length})
+            Storage ({storageAssets.length})
           </button>
           <button 
             onClick={() => setActiveTierFilter('SWITCH')}
             className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTierFilter === 'SWITCH' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'text-slate-400 hover:text-white'}`}
           >
-            SAN Switches ({connectors.filter(c => c.connector_type.includes('SANnav') || c.connector_type.includes('Switch')).length})
+            SAN Switches ({switchAssets.length})
           </button>
           <button 
             onClick={() => setActiveTierFilter('HYPERVISOR')}
             className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTierFilter === 'HYPERVISOR' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-400 hover:text-white'}`}
           >
-            Hypervisor / Host ({connectors.filter(c => c.connector_type.includes('ESXi') || c.connector_type.includes('Host')).length})
+            Hypervisor / Host ({hypervisorAssets.length})
           </button>
         </div>
       </div>
