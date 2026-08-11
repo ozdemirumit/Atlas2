@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from backend.app.core.audit import log_audit_event
 from backend.app.core.identity import SubjectIdentity, get_current_identity
 from backend.app.core.rbac import RequireScope
+from backend.app.db.storage import CONNECTORS_FILE, load_json_store, save_json_store
 
 router = APIRouter()
 
@@ -46,8 +47,8 @@ class ConnectorTestResponse(BaseModel):
     handshake_details: str
 
 
-# Governed In-Memory Infrastructure Connectors Registry
-CONNECTOR_REGISTRY: list[dict[str, Any]] = [
+# Initial Governed Baseline Connectors
+BASELINE_CONNECTORS: list[dict[str, Any]] = [
     {
         "connector_id": "conn-001",
         "name": "SANnav-Portal-Main",
@@ -91,6 +92,10 @@ CONNECTOR_REGISTRY: list[dict[str, Any]] = [
 ]
 
 
+def get_connectors() -> list[dict[str, Any]]:
+    return load_json_store(CONNECTORS_FILE, BASELINE_CONNECTORS)
+
+
 @router.get("", response_model=list[ConnectorResponse])
 async def list_connectors(
     identity: SubjectIdentity = Depends(get_current_identity),
@@ -104,7 +109,7 @@ async def list_connectors(
         resource="/api/v1/connectors",
         status="ALLOWED",
     )
-    return CONNECTOR_REGISTRY
+    return get_connectors()
 
 
 @router.post("/register", response_model=ConnectorResponse, status_code=status.HTTP_201_CREATED)
@@ -114,7 +119,8 @@ async def register_connector(
     _scope: Any = Depends(RequireScope("identity.self.read")),
 ) -> dict[str, Any]:
     """ADR-033 Connector Registration API: Registers a new infrastructure asset (SANnav, Ops Center, ESXi, etc.)."""
-    connector_id = f"conn-{len(CONNECTOR_REGISTRY) + 1:03d}"
+    connectors = get_connectors()
+    connector_id = f"conn-{len(connectors) + 1:03d}"
 
     new_connector: dict[str, Any] = {
         "connector_id": connector_id,
@@ -127,7 +133,8 @@ async def register_connector(
         "registered_at": datetime.now(UTC).isoformat(),
     }
 
-    CONNECTOR_REGISTRY.insert(0, new_connector)
+    connectors.insert(0, new_connector)
+    save_json_store(CONNECTORS_FILE, connectors)
 
     log_audit_event(
         event_type="CONNECTOR_REGISTER",
@@ -148,8 +155,8 @@ async def deregister_connector(
     _scope: Any = Depends(RequireScope("identity.self.read")),
 ) -> dict[str, str]:
     """Deregisters/removes an infrastructure asset or connector from the topology graph."""
-    global CONNECTOR_REGISTRY
-    target = next((c for c in CONNECTOR_REGISTRY if c["connector_id"] == connector_id), None)
+    connectors = get_connectors()
+    target = next((c for c in connectors if c["connector_id"] == connector_id), None)
 
     if not target:
         raise HTTPException(
@@ -157,7 +164,8 @@ async def deregister_connector(
             detail=f"Connector with ID '{connector_id}' not found.",
         )
 
-    CONNECTOR_REGISTRY = [c for c in CONNECTOR_REGISTRY if c["connector_id"] != connector_id]
+    updated_connectors = [c for c in connectors if c["connector_id"] != connector_id]
+    save_json_store(CONNECTORS_FILE, updated_connectors)
 
     log_audit_event(
         event_type="CONNECTOR_DEREGISTER",
@@ -178,7 +186,8 @@ async def test_connector_connectivity(
     _scope: Any = Depends(RequireScope("identity.self.read")),
 ) -> dict[str, Any]:
     """ADR-033 Connectivity Validation API: Tests live API handshake and latency with target asset."""
-    target = next((c for c in CONNECTOR_REGISTRY if c["connector_id"] == connector_id), None)
+    connectors = get_connectors()
+    target = next((c for c in connectors if c["connector_id"] == connector_id), None)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

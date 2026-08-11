@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from backend.app.core.audit import log_audit_event
 from backend.app.core.identity import SubjectIdentity, get_current_identity
 from backend.app.core.rbac import RequireScope
+from backend.app.db.storage import KNOWLEDGE_FILE, load_json_store, save_json_store
 
 router = APIRouter()
 
@@ -43,8 +44,8 @@ class RAGQueryResult(BaseModel):
     provenance_disclaimer: str
 
 
-# In-memory Governed Knowledge Store Baseline
-KNOWLEDGE_STORE: list[dict[str, Any]] = [
+# Governed Knowledge Store Baseline
+BASELINE_KNOWLEDGE: list[dict[str, Any]] = [
     {
         "document_id": "doc-001",
         "title": "Pure Storage Purity//FA Operational Guide",
@@ -92,6 +93,10 @@ KNOWLEDGE_STORE: list[dict[str, Any]] = [
 ]
 
 
+def get_knowledge_store() -> list[dict[str, Any]]:
+    return load_json_store(KNOWLEDGE_FILE, BASELINE_KNOWLEDGE)
+
+
 @router.get("/documents", response_model=list[KnowledgeDocumentResponse])
 async def list_knowledge_documents(
     identity: SubjectIdentity = Depends(get_current_identity),
@@ -105,7 +110,7 @@ async def list_knowledge_documents(
         resource="/api/v1/knowledge/documents",
         status="ALLOWED",
     )
-    return KNOWLEDGE_STORE
+    return get_knowledge_store()
 
 
 @router.post("/ingest", response_model=KnowledgeDocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -115,8 +120,9 @@ async def ingest_knowledge_document(
     _scope: Any = Depends(RequireScope("identity.self.read")),
 ) -> dict[str, Any]:
     """ATLAS-015 Ingestion API: Chunks, indexes, and registers a new document into the RAG vector store."""
+    store = get_knowledge_store()
     chunks = max(1, len(doc.content) // 250)
-    doc_id = f"doc-{len(KNOWLEDGE_STORE) + 1:03d}"
+    doc_id = f"doc-{len(store) + 1:03d}"
 
     new_doc: dict[str, Any] = {
         "document_id": doc_id,
@@ -130,7 +136,8 @@ async def ingest_knowledge_document(
         "status": "INDEXED",
     }
 
-    KNOWLEDGE_STORE.insert(0, new_doc)
+    store.insert(0, new_doc)
+    save_json_store(KNOWLEDGE_FILE, store)
 
     log_audit_event(
         event_type="KNOWLEDGE_INGEST",
@@ -151,10 +158,11 @@ async def query_knowledge_rag(
     _scope: Any = Depends(RequireScope("identity.self.read")),
 ) -> dict[str, Any]:
     """ATLAS-015 Semantic Retrieval API: Retrieves top-k evidence chunks with provenance citations."""
+    store = get_knowledge_store()
     q_lower = query_req.query.lower()
     matching_chunks: list[dict[str, Any]] = []
 
-    for doc in KNOWLEDGE_STORE:
+    for doc in store:
         if any(word in str(doc["content"]).lower() or word in str(doc["title"]).lower() for word in q_lower.split()):
             matching_chunks.append(
                 {
@@ -168,7 +176,7 @@ async def query_knowledge_rag(
             )
 
     if not matching_chunks:
-        doc = KNOWLEDGE_STORE[0]
+        doc = store[0]
         matching_chunks.append(
             {
                 "chunk_id": f"{doc['document_id']}-c01",

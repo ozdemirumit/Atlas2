@@ -1,0 +1,42 @@
+[
+  {
+    "connector_id": "conn-001",
+    "name": "SANnav-Portal-Main",
+    "connector_type": "Brocade SANnav",
+    "host_fqdn": "sannav.ops.local",
+    "port": 443,
+    "status": "ACTIVE",
+    "edges_mapped": 28,
+    "registered_at": "2026-08-01T10:00:00Z"
+  },
+  {
+    "connector_id": "conn-002",
+    "name": "Hitachi-OpsCenter-VSP01",
+    "connector_type": "Hitachi Ops Center",
+    "host_fqdn": "opscenter-vsp.ops.local",
+    "port": 443,
+    "status": "ACTIVE",
+    "edges_mapped": 16,
+    "registered_at": "2026-08-02T14:20:00Z"
+  },
+  {
+    "connector_id": "conn-003",
+    "name": "VCENTER-PROD-CLUSTER",
+    "connector_type": "VMware ESXi / vCenter",
+    "host_fqdn": "vcenter.infra.local",
+    "port": 443,
+    "status": "ACTIVE",
+    "edges_mapped": 42,
+    "registered_at": "2026-08-03T09:10:00Z"
+  },
+  {
+    "connector_id": "conn-004",
+    "name": "SAN-SW-BROCADE-620",
+    "connector_type": "Brocade SAN Switch",
+    "host_fqdn": "192.168.20.12",
+    "port": 22,
+    "status": "ACTIVE",
+    "edges_mapped": 24,
+    "registered_at": "2026-08-05T11:00:00Z"
+  }
+]

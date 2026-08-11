@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 
-from backend.app.api.v1.endpoints.knowledge import KNOWLEDGE_STORE
+from backend.app.api.v1.endpoints.knowledge import get_knowledge_store
 from backend.app.core.audit import log_audit_event
 from backend.app.core.identity import SubjectIdentity, get_current_identity
 from backend.app.core.rbac import RequireScope
@@ -93,8 +93,9 @@ async def run_rca_analysis(
 ) -> dict[str, Any]:
     """ATLAS-042 / ATLAS-015 RCA Engine: Gathers live RAG document evidence and correlates telemetry."""
     rag_citations: list[dict[str, Any]] = []
+    store = get_knowledge_store()
 
-    for doc in KNOWLEDGE_STORE:
+    for doc in store:
         rag_citations.append(
             {
                 "source_document": doc["title"],
