@@ -29,19 +29,21 @@ export const TopologyPage: React.FC = () => {
   const [assetPort, setAssetPort] = useState(443);
   const [assetCred, setAssetCred] = useState('');
 
-  const [connectors, setConnectors] = useState<AssetConnector[]>([
+  const defaultConnectors: AssetConnector[] = [
     { connector_id: 'conn-001', name: 'SANnav-Portal-Main', connector_type: 'Brocade SANnav', host_fqdn: 'sannav.ops.local', port: 443, status: 'ACTIVE', edges_mapped: 28, registered_at: '2026-08-01' },
     { connector_id: 'conn-002', name: 'Hitachi-OpsCenter-VSP01', connector_type: 'Hitachi Ops Center', host_fqdn: 'opscenter-vsp.ops.local', port: 443, status: 'ACTIVE', edges_mapped: 16, registered_at: '2026-08-02' },
     { connector_id: 'conn-003', name: 'VCENTER-PROD-CLUSTER', connector_type: 'VMware ESXi / vCenter', host_fqdn: 'vcenter.infra.local', port: 443, status: 'ACTIVE', edges_mapped: 42, registered_at: '2026-08-03' },
     { connector_id: 'conn-004', name: 'SAN-SW-BROCADE-620', connector_type: 'Brocade SAN Switch', host_fqdn: '192.168.20.12', port: 22, status: 'ACTIVE', edges_mapped: 24, registered_at: '2026-08-05' },
-  ]);
+  ];
+
+  const [connectors, setConnectors] = useState<AssetConnector[]>(defaultConnectors);
 
   // Fetch live connectors from Backend API
   useEffect(() => {
     fetch('/api/v1/connectors')
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data && Array.isArray(data)) {
+        if (data && Array.isArray(data) && data.length > 0) {
           setConnectors(data);
         }
       })
