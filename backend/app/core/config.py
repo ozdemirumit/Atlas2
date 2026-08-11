@@ -38,13 +38,17 @@ class Settings(BaseSettings):
     DEV_IDENTITY_ROLES: Any = Field(default_factory=lambda: ["C0_OPERATOR"])
     DEV_IDENTITY_SCOPES: Any = Field(default_factory=lambda: ["identity.self.read"])
 
-    # ATLAS-014: AI Model Gateway & Local LLM Provider Configuration
-    LLM_PROVIDER: str = "ollama"
-    LLM_BASE_URL: str = "http://localhost:11434/v1"
-    LLM_MODEL_NAME: str = "llama3:8b"
-    LLM_API_KEY: str = "ollama"
+    # ATLAS-014: AI Model Gateway & OpenAI-Compatible LLM Provider Configuration
+    LLM_PROVIDER: str = "openai-compatible"
+    LLM_BASE_URL: str = "https://heimdall-devxk.com.tr/v1"
+    LLM_MODEL: str = "qwen3-5-vl"
+    LLM_MODEL_NAME: str = "qwen3-5-vl"
+    LLM_BEARER_TOKEN: str = ""
+    LLM_API_KEY: str = ""
+    LLM_TIMEOUT: int = 120
+    LLM_TIMEOUT_SECONDS: int = 120
+    MAX_TOOL_ROUNDS: int = 10
     LLM_TEMPERATURE: float = 0.1
-    LLM_TIMEOUT_SECONDS: int = 30
 
     @field_validator("DEV_IDENTITY_ROLES", "DEV_IDENTITY_SCOPES", mode="before")
     @classmethod
@@ -65,6 +69,18 @@ class Settings(BaseSettings):
         if isinstance(v, list):
             return [str(item) for item in v]
         return []
+
+    @property
+    def EFFECTIVE_LLM_MODEL(self) -> str:
+        return self.LLM_MODEL or self.LLM_MODEL_NAME
+
+    @property
+    def EFFECTIVE_LLM_TOKEN(self) -> str:
+        return self.LLM_BEARER_TOKEN or self.LLM_API_KEY
+
+    @property
+    def EFFECTIVE_LLM_TIMEOUT(self) -> int:
+        return self.LLM_TIMEOUT or self.LLM_TIMEOUT_SECONDS
 
     @property
     def DATABASE_URL(self) -> str:
