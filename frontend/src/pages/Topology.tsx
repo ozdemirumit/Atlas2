@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Network, Server, HardDrive, Cpu, GitFork, Search, ChevronRight, Plus, Trash2, CheckCircle2, X } from 'lucide-react';
+import { Network, Server, HardDrive, Cpu, GitFork, Search, ChevronRight, Plus, Trash2, CheckCircle2, X, Database } from 'lucide-react';
 
 interface AssetConnector {
   connector_id: string;
@@ -18,6 +18,7 @@ export const TopologyPage: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [notification, setNotification] = useState('');
+  const [activeTierFilter, setActiveTierFilter] = useState<'ALL' | 'STORAGE' | 'SWITCH' | 'HYPERVISOR' | 'DATABASE'>('ALL');
 
   // Add Asset Form State
   const [assetName, setAssetName] = useState('');
@@ -83,7 +84,7 @@ export const TopologyPage: React.FC = () => {
         setConnectors(prev => [localAsset, ...prev]);
       }
 
-      setNotification(`"${assetName}" (${assetType}) haritaya başarıyla eklendi!`);
+      setNotification(`"${assetName}" (${assetType}) topoloji haritasına eklendi!`);
       setShowAddModal(false);
       setAssetName('');
       setAssetHost('');
@@ -100,7 +101,7 @@ export const TopologyPage: React.FC = () => {
         registered_at: new Date().toISOString().substring(0, 10),
       };
       setConnectors(prev => [localAsset, ...prev]);
-      setNotification(`"${assetName}" (${assetType}) haritaya başarıyla eklendi!`);
+      setNotification(`"${assetName}" (${assetType}) topoloji haritasına eklendi!`);
       setShowAddModal(false);
       setAssetName('');
       setAssetHost('');
@@ -127,11 +128,16 @@ export const TopologyPage: React.FC = () => {
     setTimeout(() => setNotification(''), 5000);
   };
 
-  const filteredConnectors = connectors.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.connector_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.host_fqdn.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredConnectors = connectors.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          c.connector_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          c.host_fqdn.toLowerCase().includes(searchTerm.toLowerCase());
+    if (activeTierFilter === 'STORAGE') return matchesSearch && (c.connector_type.includes('Hitachi') || c.connector_type.includes('Storage'));
+    if (activeTierFilter === 'SWITCH') return matchesSearch && (c.connector_type.includes('SANnav') || c.connector_type.includes('Switch'));
+    if (activeTierFilter === 'HYPERVISOR') return matchesSearch && (c.connector_type.includes('ESXi') || c.connector_type.includes('Host'));
+    if (activeTierFilter === 'DATABASE') return matchesSearch && c.connector_type.includes('Database');
+    return matchesSearch;
+  });
 
   const totalEdges = connectors.reduce((acc, c) => acc + (c.edges_mapped || 0), 0);
 
@@ -143,18 +149,18 @@ export const TopologyPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Network className="w-5 h-5 text-cyan-400" />
             <h2 className="text-2xl font-extrabold text-white tracking-tight">
-              Infrastructure Asset & Topology Graph (ATLAS-026)
+              Live Infrastructure Relationship Graph (ATLAS-026)
             </h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Hitachi Ops Center, Brocade SANnav, ESXi Hosts, SAN Switches ve Sunucu varlıklarını yönetin.
+            Hitachi Ops Center, Brocade SANnav, VMware ESXi ve SAN Switch'ler arası yönlü katman bağımlılık haritası.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-3 font-mono text-xs">
             <span className="badge-pill badge-cyan">CONNECTORS: {connectors.length} ACTIVE</span>
-            <span className="badge-pill badge-emerald">{totalEdges} EDGES</span>
+            <span className="badge-pill badge-emerald">{totalEdges} EDGES MAPPED</span>
           </div>
           <button 
             onClick={() => setShowAddModal(true)}
@@ -179,23 +185,115 @@ export const TopologyPage: React.FC = () => {
         </div>
       )}
 
-      {/* Topology Graph Visualizer Panel */}
-      <div className="atlas-glass-panel p-8 relative overflow-hidden text-center space-y-5 border-dashed border-cyan-500/30">
-        <div className="absolute top-0 right-0 p-4 font-mono text-[10px] text-slate-500">
-          GRAPH ENGINE: MULTI-DOMAIN GRAPHVIZ
+      {/* Live Interactive SVG Visualizer Graph Canvas */}
+      <div className="atlas-glass-panel p-6 space-y-4 border border-slate-800 relative overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3 font-mono text-xs">
+          <div className="flex items-center gap-2 text-cyan-300 font-bold">
+            <GitFork className="w-4 h-4 text-cyan-400 animate-pulse" />
+            <span>CANLI ÇOK KATMANLI BAĞIMLILIK VE İLİŞKİ DİYAGRAMI</span>
+          </div>
+          <div className="text-[10px] text-slate-400">
+            ENGINE: TIME-AWARE DIRECTED GRAPH (ATLAS-026)
+          </div>
         </div>
-        <div className="inline-flex p-4 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shadow-lg shadow-cyan-500/10">
-          <GitFork className="w-8 h-8 animate-pulse" />
+
+        {/* SVG Network Visualizer */}
+        <div className="relative w-full h-[320px] bg-slate-950/90 rounded-xl border border-slate-800/80 overflow-hidden flex items-center justify-center">
+          {/* Grid lines background */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:24px_24px]" />
+
+          <svg className="w-full h-full absolute inset-0 pointer-events-none" viewBox="0 0 800 320">
+            <defs>
+              <linearGradient id="grad-storage-switch" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="#6366f1" stopOpacity="0.8" />
+              </linearGradient>
+              <linearGradient id="grad-switch-esx" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0.8" />
+              </linearGradient>
+              <linearGradient id="grad-esx-db" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.8" />
+              </linearGradient>
+            </defs>
+
+            {/* Connecting Edges */}
+            <path d="M 170 160 L 300 100" stroke="url(#grad-storage-switch)" strokeWidth="2.5" strokeDasharray="6 3" className="animate-pulse" />
+            <path d="M 170 160 L 300 220" stroke="url(#grad-storage-switch)" strokeWidth="2.5" />
+            
+            <path d="M 370 100 L 500 160" stroke="url(#grad-switch-esx)" strokeWidth="2.5" />
+            <path d="M 370 220 L 500 160" stroke="url(#grad-switch-esx)" strokeWidth="2.5" strokeDasharray="6 3" className="animate-pulse" />
+
+            <path d="M 550 160 L 670 160" stroke="url(#grad-esx-db)" strokeWidth="3" />
+          </svg>
+
+          {/* Interactive Tier Nodes */}
+          <div className="relative z-10 w-full h-full flex items-center justify-between px-12 font-mono text-xs">
+            {/* Tier 1: SAN Storage */}
+            <div className="flex flex-col items-center gap-2 group cursor-pointer">
+              <div className="p-4 rounded-2xl bg-cyan-950/80 border-2 border-cyan-500 text-cyan-400 shadow-lg shadow-cyan-500/20 group-hover:scale-110 transition-transform">
+                <HardDrive className="w-7 h-7" />
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-white text-xs">Hitachi VSP / Pure FA</div>
+                <div className="text-[10px] text-cyan-400">STORAGE TIER (1.2ms)</div>
+              </div>
+            </div>
+
+            {/* Tier 2: SAN Switches */}
+            <div className="flex flex-col gap-12">
+              <div className="flex flex-col items-center gap-1 group cursor-pointer">
+                <div className="p-3 rounded-2xl bg-indigo-950/80 border-2 border-indigo-500 text-indigo-400 shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
+                  <Network className="w-5 h-5" />
+                </div>
+                <div className="text-[10px] text-indigo-300 font-bold">Brocade SANnav (Fabric A)</div>
+              </div>
+              <div className="flex flex-col items-center gap-1 group cursor-pointer">
+                <div className="p-3 rounded-2xl bg-indigo-950/80 border-2 border-indigo-500 text-indigo-400 shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
+                  <Network className="w-5 h-5" />
+                </div>
+                <div className="text-[10px] text-indigo-300 font-bold">Cisco MDS (Fabric B)</div>
+              </div>
+            </div>
+
+            {/* Tier 3: Hypervisor Hosts */}
+            <div className="flex flex-col items-center gap-2 group cursor-pointer">
+              <div className="p-4 rounded-2xl bg-emerald-950/80 border-2 border-emerald-500 text-emerald-400 shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform">
+                <Cpu className="w-7 h-7" />
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-white text-xs">VMware ESXi 8.0 Cluster</div>
+                <div className="text-[10px] text-emerald-400">HYPERVISOR (32 HOSTS)</div>
+              </div>
+            </div>
+
+            {/* Tier 4: Enterprise DB */}
+            <div className="flex flex-col items-center gap-2 group cursor-pointer">
+              <div className="p-4 rounded-2xl bg-amber-950/80 border-2 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/20 group-hover:scale-110 transition-transform">
+                <Database className="w-7 h-7" />
+              </div>
+              <div className="text-center">
+                <div className="font-bold text-white text-xs">PostgreSQL 18 / Oracle HA</div>
+                <div className="text-[10px] text-amber-400">DATABASE TIER (99.99%)</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="max-w-xl mx-auto space-y-2">
-          <h3 className="text-lg font-bold text-slate-100">Live Infrastructure Relationship Graph</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Hitachi Ops Center, Brocade SANnav, VMware vCenter ve SAN Switch konnektörleri canlı telemetri akışı sağlamaktadır.
-          </p>
+
+        {/* Tier Legend & Explanation Footer */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-2 font-mono text-xs text-slate-400 border-t border-slate-800">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-cyan-400" /> SAN Storage</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-indigo-400" /> FC Switches (SANnav)</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> ESXi Hypervisors</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Enterprise Databases</span>
+          </div>
+          <span className="text-cyan-400 font-bold">Zaman-Uyumlu Otomatik Bağımlılık Haritalama</span>
         </div>
       </div>
 
-      {/* Search & Filter Toolbar */}
+      {/* Filter & Tier Toolbar */}
       <div className="atlas-glass-panel p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -207,8 +305,32 @@ export const TopologyPage: React.FC = () => {
             className="w-full bg-slate-950/80 text-xs text-slate-200 placeholder-slate-500 pl-9 pr-4 py-2.5 rounded-xl border border-slate-800 outline-none focus:border-cyan-500/50 font-sans"
           />
         </div>
-        <div className="text-xs font-mono text-slate-400">
-          Gösterilen: <span className="text-cyan-300 font-bold">{filteredConnectors.length}</span> / {connectors.length} Varlık
+
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <button 
+            onClick={() => setActiveTierFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTierFilter === 'ALL' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            Tümü ({connectors.length})
+          </button>
+          <button 
+            onClick={() => setActiveTierFilter('STORAGE')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTierFilter === 'STORAGE' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            Storage ({connectors.filter(c => c.connector_type.includes('Hitachi') || c.connector_type.includes('Storage')).length})
+          </button>
+          <button 
+            onClick={() => setActiveTierFilter('SWITCH')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTierFilter === 'SWITCH' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            SAN Switches ({connectors.filter(c => c.connector_type.includes('SANnav') || c.connector_type.includes('Switch')).length})
+          </button>
+          <button 
+            onClick={() => setActiveTierFilter('HYPERVISOR')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTierFilter === 'HYPERVISOR' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            Hypervisor / Host ({connectors.filter(c => c.connector_type.includes('ESXi') || c.connector_type.includes('Host')).length})
+          </button>
         </div>
       </div>
 
