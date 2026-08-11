@@ -1,6 +1,7 @@
-from typing import Literal
+import json
+from typing import Any, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +36,26 @@ class Settings(BaseSettings):
     DEV_IDENTITY_NAME: str = "Local Operator"
     DEV_IDENTITY_ROLES: list[str] = Field(default_factory=lambda: ["C0_OPERATOR"])
     DEV_IDENTITY_SCOPES: list[str] = Field(default_factory=lambda: ["identity.self.read"])
+
+    @field_validator("DEV_IDENTITY_ROLES", "DEV_IDENTITY_SCOPES", mode="before")
+    @classmethod
+    def parse_list_from_env(cls, v: Any) -> list[str]:
+        """Robustly parses list fields from strings, JSON arrays, or comma-separated values."""
+        if isinstance(v, str):
+            v_str = v.strip()
+            if not v_str:
+                return []
+            if v_str.startswith("[") and v_str.endswith("]"):
+                try:
+                    parsed = json.loads(v_str)
+                    if isinstance(parsed, list):
+                        return [str(item) for item in parsed]
+                except Exception:
+                    pass
+            return [s.strip() for s in v_str.split(",") if s.strip()]
+        if isinstance(v, list):
+            return [str(item) for item in v]
+        return []
 
     @property
     def DATABASE_URL(self) -> str:
