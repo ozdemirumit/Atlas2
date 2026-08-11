@@ -13,9 +13,7 @@ ENV/
 .coverage
 htmlcov/
 
-# Node / Frontend
-node_modules/
-frontend/node_modules/
+# Node / Frontend Build Outputs (node_modules is tracked for zero-install offline readiness)
 frontend/dist/
 frontend/.output/
 .pnpm-debug.log*
