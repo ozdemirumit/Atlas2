@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     DEV_IDENTITY_ROLES: Any = Field(default_factory=lambda: ["C0_OPERATOR"])
     DEV_IDENTITY_SCOPES: Any = Field(default_factory=lambda: ["identity.self.read"])
 
+    # ATLAS-014: AI Model Gateway & Local LLM Provider Configuration
+    LLM_PROVIDER: str = "ollama"
+    LLM_BASE_URL: str = "http://localhost:11434/v1"
+    LLM_MODEL_NAME: str = "llama3:8b"
+    LLM_API_KEY: str = "ollama"
+    LLM_TEMPERATURE: float = 0.1
+    LLM_TIMEOUT_SECONDS: int = 30
+
     @field_validator("DEV_IDENTITY_ROLES", "DEV_IDENTITY_SCOPES", mode="before")
     @classmethod
     def parse_list_from_env(cls, v: Any) -> list[str]:
