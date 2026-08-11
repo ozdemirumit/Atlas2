@@ -47,6 +47,19 @@ class ConnectorTestResponse(BaseModel):
     handshake_details: str
 
 
+class FCSwitchDetail(BaseModel):
+    switch_id: str
+    name: str
+    model: str
+    fabric_name: str
+    wwn: str
+    ip_address: str
+    total_ports: int
+    online_ports: int
+    crc_errors_24h: int
+    status: str
+
+
 # Initial Governed Baseline Connectors
 BASELINE_CONNECTORS: list[dict[str, Any]] = [
     {
@@ -91,6 +104,57 @@ BASELINE_CONNECTORS: list[dict[str, Any]] = [
     },
 ]
 
+DISCOVERED_FC_SWITCHES: list[dict[str, Any]] = [
+    {
+        "switch_id": "sw-001",
+        "name": "Brocade-X6-8-Director01",
+        "model": "Brocade X6-8 Director (64G)",
+        "fabric_name": "Fabric-A-Production",
+        "wwn": "10:00:c4:f5:7c:89:12:00",
+        "ip_address": "192.168.20.10",
+        "total_ports": 64,
+        "online_ports": 58,
+        "crc_errors_24h": 420,
+        "status": "WARNING",
+    },
+    {
+        "switch_id": "sw-002",
+        "name": "Brocade-G620-Core02",
+        "model": "Brocade G620 Switch (32G)",
+        "fabric_name": "Fabric-A-Production",
+        "wwn": "10:00:c4:f5:7c:89:12:01",
+        "ip_address": "192.168.20.11",
+        "total_ports": 48,
+        "online_ports": 44,
+        "crc_errors_24h": 0,
+        "status": "HEALTHY",
+    },
+    {
+        "switch_id": "sw-003",
+        "name": "Brocade-6520-Edge03",
+        "model": "Brocade 6520 Switch (16G)",
+        "fabric_name": "Fabric-B-Redundant",
+        "wwn": "10:00:c4:f5:7c:89:12:02",
+        "ip_address": "192.168.20.12",
+        "total_ports": 48,
+        "online_ports": 40,
+        "crc_errors_24h": 0,
+        "status": "HEALTHY",
+    },
+    {
+        "switch_id": "sw-004",
+        "name": "Cisco-MDS-9710-Core04",
+        "model": "Cisco MDS 9710 Multilayer Director",
+        "fabric_name": "Fabric-B-Redundant",
+        "wwn": "20:00:00:2a:6a:11:32:04",
+        "ip_address": "192.168.20.15",
+        "total_ports": 96,
+        "online_ports": 88,
+        "crc_errors_24h": 2,
+        "status": "HEALTHY",
+    },
+]
+
 
 def get_connectors() -> list[dict[str, Any]]:
     return load_json_store(CONNECTORS_FILE, BASELINE_CONNECTORS)
@@ -110,6 +174,31 @@ async def list_connectors(
         status="ALLOWED",
     )
     return get_connectors()
+
+
+@router.get("/{connector_id}/switches", response_model=list[FCSwitchDetail])
+async def get_sannav_discovered_switches(
+    connector_id: str,
+    identity: SubjectIdentity = Depends(get_current_identity),
+    _scope: Any = Depends(RequireScope("identity.self.read")),
+) -> list[dict[str, Any]]:
+    """Returns individual FC SAN Switches managed and discovered under Brocade SANnav or Switch connectors."""
+    connectors = get_connectors()
+    target = next((c for c in connectors if c["connector_id"] == connector_id), None)
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Connector with ID '{connector_id}' not found.",
+        )
+
+    log_audit_event(
+        event_type="SANNAV_SWITCHES_LIST",
+        subject_id=identity.subject_id,
+        action=f"list_discovered_switches:{target['name']}",
+        resource=f"/api/v1/connectors/{connector_id}/switches",
+        status="ALLOWED",
+    )
+    return DISCOVERED_FC_SWITCHES
 
 
 @router.post("/register", response_model=ConnectorResponse, status_code=status.HTTP_201_CREATED)

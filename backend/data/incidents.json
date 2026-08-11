@@ -1,0 +1,11 @@
+[
+  {
+    "incident_id": "INC-2026-0810-01",
+    "title": "Elevated Storage Latency on FC SAN LUN Vol_Finance_Data01",
+    "severity": "CRITICAL",
+    "status": "UNDER_INVESTIGATION",
+    "detected_at": "2026-08-11T10:14:00Z",
+    "target_lun": "Vol_Finance_Data01",
+    "affected_cluster": "ESXI-CLUSTER-PROD01"
+  }
+]

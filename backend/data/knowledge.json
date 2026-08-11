@@ -1,5 +1,16 @@
 [
   {
+    "document_id": "doc-008",
+    "title": "Brocade FC Zoning Best Practices",
+    "category": "SAN Switch",
+    "version": "v9.2.0",
+    "access_boundary": "Restricted (NOC)",
+    "content": "This runbook documents single-initiator single-target FC port zoning procedures.",
+    "chunks_count": 1,
+    "created_at": "2026-08-11T08:08:35.965012+00:00",
+    "status": "INDEXED"
+  },
+  {
     "document_id": "doc-007",
     "title": "Brocade FC Zoning Best Practices",
     "category": "SAN Switch",

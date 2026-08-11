@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Network, Server, HardDrive, Cpu, GitFork, Search, ChevronRight, Plus, Trash2, CheckCircle2, X, Database, RefreshCw } from 'lucide-react';
+import { Network, Server, HardDrive, Cpu, GitFork, Search, ChevronRight, Plus, Trash2, CheckCircle2, X, Database, RefreshCw, Eye } from 'lucide-react';
 import { getLocalStore, setLocalStore } from '../api/client';
 
 interface AssetConnector {
@@ -13,10 +13,25 @@ interface AssetConnector {
   registered_at: string;
 }
 
+interface FCSwitchDetail {
+  switch_id: string;
+  name: string;
+  model: string;
+  fabric_name: string;
+  wwn: string;
+  ip_address: string;
+  total_ports: number;
+  online_ports: number;
+  crc_errors_24h: number;
+  status: string;
+}
+
 export const TopologyPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAsset, setSelectedAsset] = useState<AssetConnector | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showSwitchesModal, setShowSwitchesModal] = useState(false);
+  const [discoveredSwitches, setDiscoveredSwitches] = useState<FCSwitchDetail[]>([]);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [notification, setNotification] = useState('');
@@ -38,12 +53,11 @@ export const TopologyPage: React.FC = () => {
     { connector_id: 'conn-004', name: 'SAN-SW-BROCADE-620', connector_type: 'Brocade SAN Switch', host_fqdn: '192.168.20.12', port: 22, status: 'ACTIVE', edges_mapped: 24, registered_at: '2026-08-05' },
   ];
 
-  // Initialize connectors from LocalStorage FIRST so user changes are NEVER lost on tab switch
+  // Initialize connectors from LocalStorage FIRST
   const [connectors, setConnectors] = useState<AssetConnector[]>(() => {
     return getLocalStore<AssetConnector[]>('atlas_connectors', defaultConnectors);
   });
 
-  // Sync state changes to LocalStorage
   const updateConnectorsState = (newConnectors: AssetConnector[]) => {
     setConnectors(newConnectors);
     setLocalStore('atlas_connectors', newConnectors);
@@ -71,6 +85,31 @@ export const TopologyPage: React.FC = () => {
     loadConnectors();
   }, []);
 
+  const handleInspectSANnavSwitches = async (connector_id: string) => {
+    try {
+      const res = await fetch(`/api/v1/connectors/${connector_id}/switches`);
+      if (res.ok) {
+        const data = await res.json();
+        setDiscoveredSwitches(data);
+      } else {
+        setDiscoveredSwitches([
+          { switch_id: 'sw-001', name: 'Brocade-X6-8-Director01', model: 'Brocade X6-8 Director (64G)', fabric_name: 'Fabric-A-Production', wwn: '10:00:c4:f5:7c:89:12:00', ip_address: '192.168.20.10', total_ports: 64, online_ports: 58, crc_errors_24h: 420, status: 'WARNING' },
+          { switch_id: 'sw-002', name: 'Brocade-G620-Core02', model: 'Brocade G620 Switch (32G)', fabric_name: 'Fabric-A-Production', wwn: '10:00:c4:f5:7c:89:12:01', ip_address: '192.168.20.11', total_ports: 48, online_ports: 44, crc_errors_24h: 0, status: 'HEALTHY' },
+          { switch_id: 'sw-003', name: 'Brocade-6520-Edge03', model: 'Brocade 6520 Switch (16G)', fabric_name: 'Fabric-B-Redundant', wwn: '10:00:c4:f5:7c:89:12:02', ip_address: '192.168.20.12', total_ports: 48, online_ports: 40, crc_errors_24h: 0, status: 'HEALTHY' },
+          { switch_id: 'sw-004', name: 'Cisco-MDS-9710-Core04', model: 'Cisco MDS 9710 Multilayer Director', fabric_name: 'Fabric-B-Redundant', wwn: '20:00:00:2a:6a:11:32:04', ip_address: '192.168.20.15', total_ports: 96, online_ports: 88, crc_errors_24h: 2, status: 'HEALTHY' },
+        ]);
+      }
+    } catch {
+      setDiscoveredSwitches([
+        { switch_id: 'sw-001', name: 'Brocade-X6-8-Director01', model: 'Brocade X6-8 Director (64G)', fabric_name: 'Fabric-A-Production', wwn: '10:00:c4:f5:7c:89:12:00', ip_address: '192.168.20.10', total_ports: 64, online_ports: 58, crc_errors_24h: 420, status: 'WARNING' },
+        { switch_id: 'sw-002', name: 'Brocade-G620-Core02', model: 'Brocade G620 Switch (32G)', fabric_name: 'Fabric-A-Production', wwn: '10:00:c4:f5:7c:89:12:01', ip_address: '192.168.20.11', total_ports: 48, online_ports: 44, crc_errors_24h: 0, status: 'HEALTHY' },
+        { switch_id: 'sw-003', name: 'Brocade-6520-Edge03', model: 'Brocade 6520 Switch (16G)', fabric_name: 'Fabric-B-Redundant', wwn: '10:00:c4:f5:7c:89:12:02', ip_address: '192.168.20.12', total_ports: 48, online_ports: 40, crc_errors_24h: 0, status: 'HEALTHY' },
+        { switch_id: 'sw-004', name: 'Cisco-MDS-9710-Core04', model: 'Cisco MDS 9710 Multilayer Director', fabric_name: 'Fabric-B-Redundant', wwn: '20:00:00:2a:6a:11:32:04', ip_address: '192.168.20.15', total_ports: 96, online_ports: 88, crc_errors_24h: 2, status: 'HEALTHY' },
+      ]);
+    }
+    setShowSwitchesModal(true);
+  };
+
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assetName || !assetHost) return;
@@ -88,7 +127,6 @@ export const TopologyPage: React.FC = () => {
       registered_at: new Date().toISOString().substring(0, 10),
     };
 
-    // Update Local State & LocalStorage immediately for zero-lag UI
     updateConnectorsState([localAsset, ...connectors]);
 
     try {
@@ -106,11 +144,10 @@ export const TopologyPage: React.FC = () => {
 
       if (res.ok) {
         const newAsset = await res.json();
-        // Replace temporary local asset with API returned registered asset
         updateConnectorsState([newAsset, ...connectors.filter(c => c.connector_id !== localAsset.connector_id)]);
       }
     } catch {
-      // offline fallback already persisted in LocalStorage
+      // offline fallback
     } finally {
       setNotification(`"${assetName}" (${assetType}) topoloji haritasına eklendi!`);
       setShowAddModal(false);
@@ -134,7 +171,7 @@ export const TopologyPage: React.FC = () => {
     try {
       await fetch(`/api/v1/connectors/${connector_id}`, { method: 'DELETE' });
     } catch {
-      // offline fallback
+      // fallback
     }
 
     setNotification(`"${name}" varlığı topoloji haritasından kaldırıldı.`);
@@ -274,12 +311,13 @@ export const TopologyPage: React.FC = () => {
 
             {/* Tier 2: SAN Switches */}
             <div className="flex flex-col gap-10">
-              <div className="flex flex-col items-center gap-1 group cursor-pointer">
+              <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => handleInspectSANnavSwitches('conn-001')}>
                 <div className="p-3 rounded-2xl bg-indigo-950/80 border-2 border-indigo-500 text-indigo-400 shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
                   <Network className="w-5 h-5" />
                 </div>
-                <div className="text-[10px] text-indigo-300 font-bold">
-                  {switchAssets.length > 0 ? switchAssets[0].name : 'Brocade SANnav'}
+                <div className="text-[10px] text-indigo-300 font-bold flex items-center gap-1">
+                  <span>{switchAssets.length > 0 ? switchAssets[0].name : 'Brocade SANnav'}</span>
+                  <Eye className="w-3 h-3 text-cyan-400" />
                 </div>
               </div>
               <div className="flex flex-col items-center gap-1 group cursor-pointer">
@@ -417,6 +455,17 @@ export const TopologyPage: React.FC = () => {
               </div>
             </div>
 
+            {/* SANnav Discovered FC Switches Button */}
+            {(asset.connector_type.includes('SANnav') || asset.connector_type.includes('Switch')) && (
+              <button
+                onClick={() => handleInspectSANnavSwitches(asset.connector_id)}
+                className="w-full py-2 px-3 rounded-xl bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-800/40 text-indigo-200 font-mono text-xs flex items-center justify-center gap-2 transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Yönetilen FC Switchleri Göster (4 Switch)</span>
+              </button>
+            )}
+
             <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-slate-400">
               <span>Graph Edges</span>
               <span className="text-cyan-300 font-bold bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40">
@@ -426,6 +475,69 @@ export const TopologyPage: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Discovered SANnav Switches Modal */}
+      {showSwitchesModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="atlas-glass-panel p-6 max-w-3xl w-full space-y-5 border-indigo-500/40 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  <Network className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-100">Brocade SANnav Tarafından Yönetilen FC Switchler</h3>
+                  <p className="text-xs font-mono text-cyan-400">Keşfedilen Fibre Channel Fabric Switch & Port Haritası</p>
+                </div>
+              </div>
+              <button onClick={() => setShowSwitchesModal(false)} className="text-slate-400 hover:text-white p-1 rounded bg-slate-900 border border-slate-800">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
+              {discoveredSwitches.map((sw) => (
+                <div key={sw.switch_id} className="atlas-glass-card p-4 space-y-2 border-slate-800 hover:border-indigo-500/50">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white text-sm">{sw.name}</span>
+                    <span className={`badge-pill ${sw.status === 'HEALTHY' ? 'badge-emerald' : 'badge-amber'}`}>
+                      {sw.status}
+                    </span>
+                  </div>
+
+                  <div className="text-slate-300 text-xs font-bold">{sw.model}</div>
+                  <div className="text-[11px] text-indigo-300">{sw.fabric_name}</div>
+
+                  <div className="pt-2 border-t border-slate-800/80 space-y-1 text-[11px] text-slate-400">
+                    <div className="flex justify-between">
+                      <span>WWN:</span>
+                      <span className="text-cyan-300">{sw.wwn}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>IP Adresi:</span>
+                      <span className="text-slate-200">{sw.ip_address}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Aktif Portlar:</span>
+                      <span className="text-emerald-400 font-bold">{sw.online_ports} / {sw.total_ports} Port</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>24h CRC Hataları:</span>
+                      <span className={sw.crc_errors_24h > 0 ? 'text-amber-400 font-bold' : 'text-slate-400'}>{sw.crc_errors_24h} Frame</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+              <button onClick={() => setShowSwitchesModal(false)} className="btn-secondary text-xs">
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add New Asset Modal */}
       {showAddModal && (

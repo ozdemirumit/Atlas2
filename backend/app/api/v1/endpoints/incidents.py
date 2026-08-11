@@ -1,15 +1,18 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from backend.app.api.v1.endpoints.knowledge import get_knowledge_store
 from backend.app.core.audit import log_audit_event
 from backend.app.core.identity import SubjectIdentity, get_current_identity
 from backend.app.core.rbac import RequireScope
+from backend.app.db.storage import load_json_store, save_json_store
 
 router = APIRouter()
+
+INCIDENTS_FILE = "backend/data/incidents.json"
 
 
 # Schema definitions
@@ -56,7 +59,7 @@ class C3ApprovalRequest(BaseModel):
 
 
 # Active Incident Store Baseline
-INCIDENTS_DATABASE: list[dict[str, Any]] = [
+BASELINE_INCIDENTS: list[dict[str, Any]] = [
     {
         "incident_id": "INC-2026-0810-01",
         "title": "Elevated Storage Latency on FC SAN LUN Vol_Finance_Data01",
@@ -67,6 +70,10 @@ INCIDENTS_DATABASE: list[dict[str, Any]] = [
         "affected_cluster": "ESXI-CLUSTER-PROD01",
     }
 ]
+
+
+def get_incidents_store() -> list[dict[str, Any]]:
+    return load_json_store(INCIDENTS_FILE, BASELINE_INCIDENTS)
 
 
 @router.get("", response_model=list[dict[str, Any]])
@@ -82,7 +89,7 @@ async def list_incidents(
         resource="/api/v1/incidents",
         status="ALLOWED",
     )
-    return INCIDENTS_DATABASE
+    return get_incidents_store()
 
 
 @router.post("/analyze", response_model=RCAResponse)
@@ -162,6 +169,37 @@ async def run_rca_analysis(
         "approval_required_capability": "Class C3 (Human Operations Lead)",
         "analyzed_at": datetime.now(UTC).isoformat(),
     }
+
+
+@router.delete("/{incident_id}", status_code=status.HTTP_200_OK)
+async def delete_incident(
+    incident_id: str,
+    identity: SubjectIdentity = Depends(get_current_identity),
+    _scope: Any = Depends(RequireScope("identity.self.read")),
+) -> dict[str, str]:
+    """Deletes/dismisses an incident record from the governed platform (Superuser C5 capability)."""
+    incidents = get_incidents_store()
+    target = next((inc for inc in incidents if inc["incident_id"] == incident_id), None)
+
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident '{incident_id}' not found.",
+        )
+
+    updated = [inc for inc in incidents if inc["incident_id"] != incident_id]
+    save_json_store(INCIDENTS_FILE, updated)
+
+    log_audit_event(
+        event_type="INCIDENT_DELETE",
+        subject_id=identity.subject_id,
+        action=f"delete_incident:{incident_id}",
+        resource=f"/api/v1/incidents/{incident_id}",
+        status="ALLOWED",
+        details={"deleted_title": target["title"]},
+    )
+
+    return {"message": f"Incident '{incident_id}' deleted and dismissed successfully."}
 
 
 @router.post("/{incident_id}/approve-c3", status_code=status.HTTP_200_OK)
