@@ -1,6 +1,8 @@
-from fastapi import HTTPException, status
+from typing import Any
 
-from backend.app.core.identity import SubjectIdentity
+from fastapi import Depends, HTTPException, status
+
+from backend.app.core.identity import SubjectIdentity, get_current_identity
 
 
 class RequireScope:
@@ -9,12 +11,22 @@ class RequireScope:
     def __init__(self, required_scope: str) -> None:
         self.required_scope = required_scope
 
-    def __call__(self, identity: SubjectIdentity) -> SubjectIdentity:
-        if not identity.has_scope(self.required_scope):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Forbidden: Identity '{identity.subject_id}' lacks required scope '{self.required_scope}'.",
-            )
+    def __call__(self, identity: Any = Depends(get_current_identity)) -> Any:
+        if isinstance(identity, SubjectIdentity):
+            if not identity.has_scope(self.required_scope):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Forbidden: Identity '{identity.subject_id}' lacks required scope '{self.required_scope}'.",
+                )
+            return identity
+        if isinstance(identity, dict):
+            scopes = identity.get("scopes", [])
+            if self.required_scope not in scopes:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Forbidden: Identity '{identity.get('sub')}' lacks required scope '{self.required_scope}'.",
+                )
+            return identity
         return identity
 
 

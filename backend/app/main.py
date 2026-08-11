@@ -15,10 +15,7 @@ logger = logging.getLogger("atlas.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    logger.info(
-        f"Starting {settings.PROJECT_NAME} v{settings.VERSION} "
-        f"in environment '{settings.ENVIRONMENT}'"
-    )
+    logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION} in environment '{settings.ENVIRONMENT}'")
     if settings.ENABLE_DEV_IDENTITY:
         logger.warning(
             "DEVELOPMENT IDENTITY PROVIDER ACTIVE (ADR-003). "
